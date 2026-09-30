@@ -1,0 +1,640 @@
+clear all
+close all
+clc
+addpath('GasIdeale')
+addpath('Componenti')
+addpath('OUTPUT')
+
+%% 1. INIZIALIZZAZIONE E DATI DI VOLO (OFF-DESIGN PURO)
+load('Dati_Design.mat'); % CARICA IL MOTORE GIA' COSTRUITO 
+
+global R
+R = 287.05;
+k_air = 1.4;
+k_gas = 1.33;
+
+cp_air = heat_capacity_at_constant_pressure(k_air);
+cp_gas = heat_capacity_at_constant_pressure(k_gas);
+
+% FIX 4: RIMOSSA RIGA 'T4_design_reale = 1400;' - sovrascriveva silenziosamente
+% il valore caricato da Dati_Design.mat (riga 9). Ora si usa il vero valore di progetto.
+m_corr_4_design = FP4_design * 101325 / sqrt(288.15);
+
+fprintf('======================================================\n');
+fprintf('>>> OFF-DESIGN J58: MISSIONE DI CROCIERA STRATOSFERICA <<<\n');
+fprintf('======================================================\n');
+
+quota   = input('>>> Inserisci quota [m] (es. 26000): ');
+M0        = input('>>> Inserisci Mach (es. 3.2): ');
+massa_lb  = input('>>> Inserisci massa velivolo [lb] (es. 65000): ');
+gamma_deg =input('>>> Inserisci angolo di rampa [deg] (es. 0): ');
+gamma_rad = gamma_deg * pi / 180;
+
+[t0, a0, p0, ~] = atmosisa(quota);
+
+%% 2. SCALATURA MAPPE SUL DESIGN POINT ORIGINALE
+T2_design        = 288.15 * (1 + (k_air-1)/2 * 0.32^2);
+N_cycle_design_C = N_nominale / sqrt(T2_design / 288.15);
+N_cycle_design_t = N_nominale / sqrt(T4_design_reale / 288.15);
+
+filename_C = 'CompressorMap.txt';
+[N_c, mf_func, pr_func, ef_func, surge] = Import_Compressor_Map(filename_C, 1, 0.6, m_corr_2_design, OPR_design, eta_c_design);
+
+PR_LPC_des = OPR_design^(4/9);
+PR_HPC_des = OPR_design^(5/9);
+
+T25_des_val      = T2_design + T2_design * (PR_LPC_des^((k_air-1)/k_air) - 1) / eta_c_design;
+P2_des_val       = 101325 * (1 + (k_air-1)/2 * 0.32^2)^(k_air/(k_air-1)) * 0.997;
+P25_des_val      = P2_des_val * PR_LPC_des;
+theta_25_des     = T25_des_val / 288.15;
+delta_25_des     = P25_des_val / 101325;
+m_corr_25_design = massflow_design * sqrt(theta_25_des) / delta_25_des;
+
+[N_c_L, mf_func_L, pr_func_L, ef_func_L, surge_L] = Import_Compressor_Map(filename_C, 1, 0.6, m_corr_2_design,  PR_LPC_des, eta_c_design);
+[N_c_H, mf_func_H, pr_func_H, ef_func_H, surge_H] = Import_Compressor_Map(filename_C, 1, 0.6, m_corr_25_design, PR_HPC_des, eta_c_design);
+
+filename_T = 'TurbineMap.txt';
+[N_t, mf_func_t, pr_func_t, ef_func_t] = Import_Turbine_Map(filename_T, 1, 0.5, m_corr_4_design, PR_turb_design, eta_t_design);
+
+% Assunzioni operative fisse
+N = N_nominale; 
+p_ratio_comb = 0.975; 
+LHV = 43.5e6;
+eta_comb = 0.999; 
+eta_mech = 0.995;
+p_ratio_AB = 0.95;
+eta_AB = 0.98;
+p_ratio_nozzle = 0.98; 
+
+
+
+% =========================================================
+% FIX 2: GEOMETRIA MIXER OTTIMIZZATA PER CORE > 60%
+% =========================================================
+% =========================================================
+% GEOMETRIA MIXER: CARICATA RIGOROSAMENTE DAL DESIGN!
+% =========================================================
+A6_core   = A6_core_design;   % Letta dal Dati_Design.mat
+A6_bypass = A6_bypass_design; % Letta dal Dati_Design.matTubo bypass ristretto per opporre resistenza fluidodinamica
+
+%% 3. FREE STREAM E INTAKE
+T0 = total_temperature_from_Mach(t0, M0, k_air);
+P0 = total_pressure_from_Mach(p0, M0, k_air);
+v0 = a0 * M0; 
+d0 = p0 / (R * t0);
+
+if M0 <= 1 
+    p_ratio_intake_eff = 0.997;
+else 
+    p_ratio_intake_eff = 0.997 * (1 - 0.075 * (M0 - 1)^1.35);
+end
+P2 = P0 * p_ratio_intake_eff;
+T2 = T0;
+
+%% 3b. SPINTA NECESSARIA AL VOLO (non dipende dal motore - va calcolata
+% PRIMA, serve dentro il nuovo loop 5 su T_AB per sapere quando fermarsi)
+massa_kg = massa_lb * 0.453592; 
+Peso = massa_kg * 9.81;
+Mach_curve = [0, 0.5, 0.9, 0.95, 1.0, 1.05, 1.1, 1.2, 1.5, 2.0, 2.5, 3.0, 3.5];
+LD_curve   = [11.8, 11.6, 11.3, 11.2, 10.5, 8.0, 6.8, 6.2, 6.1, 6.1, 6.2, 6.5, 6.6];
+E_aero     = interp1(Mach_curve, LD_curve, M0, 'linear', 'extrap');
+
+Portanza           = Peso * cos(gamma_rad);
+Resistenza         = Portanza / E_aero;
+Spinta_Nec_Tot     = Resistenza + Peso * sin(gamma_rad);
+Spinta_Nec_Singolo = Spinta_Nec_Tot / 2;
+
+%% 4. I 4 LOOP ANNIDATI (SECANTE + MIXER ISOBARO)
+TOLL = 1e-6;
+
+% FIX 16: T_AB non e' piu' un valore fisso "abbastanza alto per il caso
+% peggiore" - e' ora un quinto loop (il piu' esterno di tutti) che trova
+% il minimo T_AB che basta ESATTAMENTE a pareggiare la spinta richiesta,
+% cosi' non si brucia piu' carburante del necessario. Ogni tentativo di
+% T_AB richiede di risolvere di nuovo tutti e 4 i loop del motore, perche'
+% T_AB entra nella chiusura del loop 4 (M7=0.4 dipende da T7=T_AB).
+T_AB = 1950; err_thrust = 1; iter_TAB = 0;
+while abs(err_thrust) > TOLL && iter_TAB < 50
+    iter_TAB = iter_TAB + 1;
+
+Beta_C = 0.6; 
+err_comp = 1; 
+iter_C = 0;
+
+while abs(err_comp) > TOLL && iter_C < 50
+    iter_C = iter_C + 1;
+    
+    theta = T2 / 288.15; 
+    delta = P2 / 101325;
+    Nc_ad = (N / sqrt(theta)) / N_cycle_design_C;
+
+    if M0 <= 2.0
+        ratio_core_tot = 1.0; 
+        err_mixer = 1;
+        iter_mix = 0;
+    else
+        if iter_C == 1
+            ratio_core_tot = 0.8; %Tentativo iniziale mixer
+        end
+        err_mixer = 1; 
+        iter_mix = 0;
+    end
+
+    while abs(err_mixer) > TOLL && iter_mix < 50
+        iter_mix = iter_mix + 1; 
+        
+        % Compressore
+        if M0 <= 2.0
+            mfc = mf_func(Nc_ad, Beta_C); 
+            OPR_eff = pr_func(Nc_ad, Beta_C); 
+            eta_comp_eff = ef_func(Nc_ad, Beta_C);
+            mf = mfc * delta / sqrt(theta); 
+            mf_core = mf; 
+            mf_bypass = 0;
+            P3 = OPR_eff * P2; 
+            T3_ise = T2 * OPR_eff^((k_air-1)/k_air); 
+            T3 = T2 + (T3_ise - T2) / eta_comp_eff;
+            Pow_comp = mf * cp_air * (T3 - T2); 
+            P2_5 = P2; 
+            T2_5 = T2;
+        else
+            mfc_LPC = mf_func_L(Nc_ad, Beta_C); 
+            PR_LPC_eff = pr_func_L(Nc_ad, Beta_C); 
+            eta_LPC_eff = ef_func_L(Nc_ad, Beta_C);
+            mf = mfc_LPC * delta / sqrt(theta); 
+            P2_5 = PR_LPC_eff * P2; 
+            T2_5_ise = T2 * PR_LPC_eff^((k_air-1)/k_air); 
+            T2_5 = T2 + (T2_5_ise - T2) / eta_LPC_eff;
+            mf_core = mf * ratio_core_tot; 
+            mf_bypass = mf - mf_core; 
+            Pow_LPC = mf * cp_air * (T2_5 - T2);
+
+            theta_25 = T2_5 / 288.15; 
+            delta_25 = P2_5 / 101325;
+            Nc_ad_hpc = (N / sqrt(theta_25)) / (N_nominale / sqrt(T25_des_val / 288.15));
+            bh_lo = 0.01; 
+            bh_hi = 0.99; 
+            Beta_HPC = 0.5; 
+            for ih = 1:20
+                mf_HPC_test = mf_func_H(Nc_ad_hpc, Beta_HPC) * delta_25 / sqrt(theta_25);
+                if mf_HPC_test > mf_core
+                    bh_lo = Beta_HPC;
+                else
+                    bh_hi = Beta_HPC; 
+                end
+                Beta_HPC = (bh_lo + bh_hi) / 2;
+            end
+            mfc_HPC = mf_func_H(Nc_ad_hpc, Beta_HPC); 
+            PR_HPC_eff = pr_func_H(Nc_ad_hpc, Beta_HPC); 
+            eta_HPC_eff = ef_func_H(Nc_ad_hpc, Beta_HPC);
+            P3 = PR_HPC_eff * P2_5; 
+            T3_ise = T2_5 * PR_HPC_eff^((k_air-1)/k_air); 
+            T3 = T2_5 + (T3_ise - T2_5) / eta_HPC_eff;
+            Pow_HPC = mf_core * cp_air * (T3 - T2_5);
+            Pow_comp = Pow_LPC + Pow_HPC; 
+            OPR_eff = PR_LPC_eff * PR_HPC_eff;
+        end
+
+        % Combustore
+        T4 = 1400; err_comb = 1; iter_comb = 0;
+        while abs(err_comb) > TOLL && iter_comb < 50
+            iter_comb = iter_comb + 1;
+            P4 = P3 * p_ratio_comb; 
+            f_core = (cp_gas*T4 - cp_air*T3) / (LHV*eta_comb - cp_gas*T4);
+            mf_fuel_core = mf_core * f_core; 
+            mf4 = mf_core + mf_fuel_core;
+
+            % Turbina e Ugello
+            Beta_T = 0.5; 
+            err_turb = 1; 
+            iter_turb = 0;
+            while abs(err_turb) > TOLL && iter_turb < 50
+                iter_turb = iter_turb + 1;
+                theta_T = T4 / 288.15; 
+                delta_T = P4 / 101325;
+                Nc_ad_t = (N / sqrt(theta_T)) / N_cycle_design_t;
+                mfc_t = mf_func_t(Nc_ad_t, Beta_T); 
+                PR = pr_func_t(Nc_ad_t, Beta_T); 
+                eta_turb = ef_func_t(Nc_ad_t, Beta_T);
+                mf_t = mfc_t * delta_T / sqrt(theta_T);
+                P5 = P4 / PR; 
+                T5_ise = T4 / PR^((k_gas-1)/k_gas); 
+                T5 = T4 - (T4 - T5_ise) * eta_turb;
+                Pow_turb = mf_t * cp_gas * (T4 - T5) * eta_mech;
+                
+                % Mixer Isobaro
+                if M0 > 2.0
+                    p_core = calc_p_stat(mf_t, P5, T5, k_gas, R, A6_core);
+                    p_byp  = calc_p_stat(mf_bypass, P2_5, T2_5, k_air, R, A6_bypass);
+                    p_avg = (p_core * A6_core + p_byp * A6_bypass) / (A6_core + A6_bypass);
+                    mf6 = mf_t + mf_bypass;
+                    T6 = (mf_t*cp_gas*T5 + mf_bypass*cp_air*T2_5) / (mf6*cp_gas);
+                    A6_mix = A6_core + A6_bypass;
+                    C_mix = mf6 * sqrt(R * T6) / (p_avg * A6_mix * sqrt(k_gas));
+                    M6_sq = (-1 + sqrt(1 + 2*(k_gas-1)*C_mix^2)) / (k_gas-1);
+                    P6 = p_avg * (1 + (k_gas-1)/2 * M6_sq)^(k_gas/(k_gas-1));
+                else
+                    mf6 = mf_t; 
+                    T6 = T5; 
+                    P6 = P5; 
+                    p_core = 0; 
+                    p_byp = 0; 
+                end
+                
+                % FIX 12: GEOMETRIA VARIABILE - A8/A9 sono l'ugello mobile
+                % del J58, non piu' congelate dal design. Beta_T ora si
+                % trova imponendo M7=0.4 (l'ingresso ugello, stesso valore
+                % usato come INPUT in Main_Design.m) sull'area A7, che
+                % quella si' resta fissa (e' il condotto a monte
+                % dell'ugello vero e proprio, non le "palpebre" mobili).
+                % A8 e A9 vengono calcolate DOPO il loop, come risultato.
+                P7 = P6 * p_ratio_AB;
+                T7 = T_AB;
+                f_AB = max(0, (cp_gas*T_AB - cp_gas*T6) / (LHV*eta_AB - cp_gas*T_AB));
+                mf7 = mf6 * (1 + f_AB); 
+
+                [~, M7] = calc_p_stat(mf7, P7, T7, k_gas, R, A7_design);
+                err_turb = (M7 / 0.4) - 1;
+                
+                if iter_turb == 1
+                    d_err_T = 1; 
+                    d_var_T = 1;
+                else
+                    d_err_T = err_turb - err_turb_old; 
+                    d_var_T = Beta_T - Beta_T_old; 
+                    if abs(d_err_T)<1e-6
+                        d_err_T=1e-6; 
+                    end
+                end
+                step_T = -err_turb / (d_err_T / d_var_T);
+                step_T = max(-0.1, min(0.1, step_T));
+                Beta_T_old = Beta_T; 
+                err_turb_old = err_turb;
+                Beta_T = max(0.01, min(0.99, Beta_T + step_T));
+            end
+
+            err_comb = (Pow_comp / Pow_turb) - 1;
+            
+            if iter_comb == 1 
+                d_err_4 = 1; 
+                d_var_4 = 100; 
+            else
+                d_err_4 = err_comb - err_comb_old; 
+                d_var_4 = T4 - T4_old; 
+                if abs(d_err_4)<1e-6
+                    d_err_4=1e-6; 
+                end
+            end
+            step_4 = -err_comb / (d_err_4 / d_var_4);
+            step_4 = max(-150, min(150, step_4));
+            T4_old = T4; 
+            err_comb_old = err_comb; 
+            T4 = T4 + step_4;
+        end
+
+        if M0 > 2.0
+            err_mixer = (p_byp / p_core) - 1;
+            if iter_mix == 1
+                d_err_M = 1; 
+                d_var_M = 1;
+            else
+                d_err_M = err_mixer - err_mixer_old; 
+                d_var_M = ratio_core_tot - ratio_core_tot_old; 
+                if abs(d_err_M)<1e-6 
+                    d_err_M=1e-6; 
+                end
+            end
+            step_M = -err_mixer / (d_err_M / d_var_M);
+            step_M = max(-0.05, min(0.05, step_M));
+            ratio_core_tot_old = ratio_core_tot; 
+            err_mixer_old = err_mixer;
+            
+            % =========================================================
+            % FIX 3: LIMITE MATEMATICO SECANTE (Mai sotto al 60% nel Core)
+            % =========================================================
+            ratio_core_tot = max(0.60, min(0.99, ratio_core_tot + step_M));
+        else
+            err_mixer = 0; 
+        end
+    end
+    
+    err_comp = (mf_t / mf4) - 1;
+    
+    if iter_C == 1 
+        d_err_C = 1; 
+        d_var_C = 1;
+    else 
+        d_err_C = err_comp - err_comp_old; 
+        d_var_C = Beta_C - Beta_C_old; 
+        if abs(d_err_C)<1e-6 
+            d_err_C=1e-6; 
+        end
+    end
+    step_C = -err_comp / (d_err_C / d_var_C);
+    step_C = max(-0.05, min(0.05, step_C));
+    Beta_C_old = Beta_C;
+    err_comp_old = err_comp; 
+    Beta_C = max(0.01, min(0.99, Beta_C + step_C));
+end
+
+% FIX 7: verifica onesta della convergenza (nessuna modifica alla fisica/
+% al limite 60% del mixer). iter_C e iter_mix da soli non dicono se la
+% tolleranza TOLL e' stata davvero raggiunta o se il loop si e' solo
+% fermato per aver esaurito le iterazioni disponibili.
+conv_compressore = abs(err_comp) <= TOLL;
+conv_mixer = (M0 <= 2.0) || (abs(err_mixer) <= TOLL);
+
+% FIX 11: la traccia richiede M2 < 0.5 (Mach ingresso compressore).
+% M7 invece con la geometria variabile (FIX 12) non va piu' verificata
+% qui: e' gia' la condizione che il loop 4 ha imposto per costruzione
+% (dovrebbe risultare 0.400 con altissima precisione, a conferma che il
+% loop e' davvero convergente).
+[~, M2] = calc_p_stat(mf, P2, T2, k_air, R, A2_design);
+
+%% 5. GOLA E UGELLO A GEOMETRIA VARIABILE: A8/A9 COME RISULTATO
+% FIX 12 (continua): stessa ipotesi di gola sempre bloccata (M8=1) gia'
+% usata in Main_Design.m al design point - qui pero' A8 non e' un input,
+% e' quello che l'ugello mobile deve valere per questa condizione di volo.
+P8 = P7 * p_ratio_nozzle;
+M8 = 1;
+p8 = P8 / (1 + (k_gas-1)/2*M8^2)^(k_gas/(k_gas-1));
+t8 = T_AB / (1 + (k_gas-1)/2 * M8^2);
+v8 = sqrt(k_gas * R * t8) * M8;
+d8 = p8 / (R * t8);
+A8_now = mf7 / (d8 * v8);
+
+p9 = p0; 
+M9_exit   = sqrt(max(0, ((P8/p9)^((k_gas-1)/k_gas) - 1) * 2 / (k_gas-1)));
+t9_exit   = T_AB / (1 + (k_gas-1)/2 * M9_exit^2);
+v9_exit   = sqrt(k_gas * R * t9_exit) * M9_exit;
+d9_exit   = p9 / (R * t9_exit);
+A9_now    = mf7 / (d9_exit * v9_exit);
+
+Gross_Thrust = mf7 * v9_exit; 
+Ram_Drag = mf * v0;
+Thrust_Available = Gross_Thrust - Ram_Drag;
+mf_fuel_totale = (mf_core*f_core) + (mf6*f_AB);
+
+% FIX 16 (continua): chiusura del loop 5 - stessa secante degli altri 4,
+% clampata al range di specifica per T_AB (2000-3200 F = 1366-2033 K).
+margine = Thrust_Available - Spinta_Nec_Singolo;
+err_thrust = margine / Spinta_Nec_Singolo;
+
+if iter_TAB == 1
+    d_err_TAB = 1; 
+    d_var_TAB = 100;
+else
+    d_err_TAB = err_thrust - err_thrust_old; 
+    d_var_TAB = T_AB - T_AB_old; 
+    if abs(d_err_TAB) < 1e-6
+        d_err_TAB = 1e-6; 
+    end
+end
+step_TAB = -err_thrust / (d_err_TAB / d_var_TAB);
+step_TAB = max(-200, min(200, step_TAB));
+T_AB_old = T_AB; 
+err_thrust_old = err_thrust;
+T_AB = max(1366, min(2033, T_AB + step_TAB));
+end
+
+
+% Bloccato al pavimento di specifica (1366K) con margine gia' positivo e'
+% un esito valido (il minimo consentito basta e avanza), non un fallimento.
+conv_TAB = (abs(err_thrust) <= TOLL) || (T_AB <= 1366 && margine >= 0);
+
+%% 6. MECCANICA DEL VOLO (Spinta_Nec_Singolo gia' calcolata in 3b)
+S_wing_m2 = 1605 * 0.092903; 
+q = 0.5 * d0 * v0^2;
+CL_req    = Portanza / max(q * S_wing_m2, 1e-6);
+CL_alpha  = interp1([0, 1, 2.5, 3.25, 4.0], [0.05, 0.05, 0.035, 0.0275, 0.020], M0, 'linear', 'extrap');
+AoA_req   = CL_req / CL_alpha;
+margine   = Thrust_Available - Spinta_Nec_Singolo;
+
+TSFC_g_Nh = (mf_fuel_totale * 3.6e6) / Thrust_Available;
+
+
+%% 7. STAMPE E VERIFICA SPECIFICHE
+
+if conv_compressore && conv_mixer && conv_TAB
+    fprintf('\n>>> CONVERGENZA RAGGIUNTA: %d Iter. Compressore | %d Iter. Mixer | %d Iter. T_AB <<<\n\n', iter_C, iter_mix, iter_TAB);
+else
+    fprintf('\n>>> ATTENZIONE: TOLLERANZA NON RAGGIUNTA (limite iterazioni) <<<\n');
+    if ~conv_compressore
+        fprintf('    Loop Compressore: %d/%d iter, err_comp = %.3e (tolleranza %.0e)\n', iter_C, 50, err_comp, TOLL);
+    end
+    if ~conv_mixer
+        fprintf('    Loop Mixer:       %d/%d iter, err_mixer = %.3e (tolleranza %.0e) | ratio_core_tot bloccato a = %.4f\n', iter_mix, 50, err_mixer, TOLL, ratio_core_tot);
+    end
+    if ~conv_TAB
+        fprintf('    Loop T_AB:        %d/%d iter, err_thrust = %.3e (tolleranza %.0e) | T_AB bloccato a = %.1f K\n', iter_TAB, 50, err_thrust, TOLL, T_AB);
+    end
+    fprintf('    Risultati sotto calcolati con gli ultimi valori disponibili: da verificare.\n\n');
+end
+
+fprintf('--- 1. FLUIDODINAMICA INGRESSO E COMPRESSORE ---\n');
+fprintf('Portata aria elaborata:       %.2f kg/s\n', mf);
+if M0 > 2.0
+    fprintf('Rapporto Compressione (OPR):  %.2f (LPC: %.2f | HPC: %.2f)\n', OPR_eff, PR_LPC_eff, PR_HPC_eff);
+else
+    fprintf('Rapporto Compressione (OPR):  %.2f\n', OPR_eff);
+end
+fprintf('Temp. uscita Compressore (T3): %.1f K\n', T3);
+
+% FIX 11 (continua): verifica dei vincoli di consegna anche fuori-progetto,
+% con lo stesso schema OK/VIOLATO gia' usato in stampa_risultati.m per il design.
+fprintf('\n--- VERIFICA VINCOLI DI CONSEGNA (OFF-DESIGN) ---\n');
+if T2 >= 233 && T2 <= 700
+    fprintf('Temp. Ingresso Comp (T2):     %.2f K       [OK] (233-700 K)\n', T2);
+else
+    fprintf('Temp. Ingresso Comp (T2):     %.2f K       [VIOLATO] (233-700 K)\n', T2);
+end
+if M2 < 0.5
+    fprintf('Mach Ingresso Comp (M2):      %.3f        [OK] (< 0.5)\n', M2);
+else
+    fprintf('Mach Ingresso Comp (M2):      %.3f        [VIOLATO] (< 0.5)\n', M2);
+end
+if M0 > 2.0
+    fprintf('OPR:                          %.2f          (target di specifica: ~2 in crociera)\n', OPR_eff);
+else
+    fprintf('OPR:                          %.2f\n', OPR_eff);
+end
+
+fprintf('\n--- 2. CICLO TERMICO E MIXER ---\n');
+% FIX 17: aggiunto controllo T4 (2000-3200 F = 1366-2033 K, stesso range
+% del post-bruciatore) - mancava del tutto fuori progetto, era verificato
+% solo al design in Main_Design.m. Con T_AB ora vicino al suo limite
+% (FIX 16), vale la pena controllare anche T4 esplicitamente.
+if T4 >= 1366 && T4 <= 2033
+    fprintf('Temp. Combustione Core (T4):  %.1f K       [OK] (1366-2033 K)\n', T4);
+else
+    fprintf('Temp. Combustione Core (T4):  %.1f K       [VIOLATO] (1366-2033 K)\n', T4);
+end
+if M0 > 2.0
+    fprintf('Flusso nel Core:              %.1f%%\n', ratio_core_tot*100);
+    fprintf('Bypass Ratio (Deviata):       %.1f%%\n', (1-ratio_core_tot)*100);
+    if ratio_core_tot >= 0.60 && ratio_core_tot <= 1.00
+        fprintf('Range Bypass Ratio:           [OK] (core 60-100%%)\n');
+    else
+        fprintf('Range Bypass Ratio:           [VIOLATO] (core 60-100%%)\n');
+    end
+    fprintf('Press. Statica Core:          %.1f Pa\n', p_core);
+    fprintf('Press. Statica Bypass:        %.1f Pa\n', p_byp);
+    fprintf('Perdita P_tot nel Mixing:     %.1f Pa\n', max(P5, P2_5) - P6);
+else
+    fprintf('Mixer inattivo (Valvole Chiuse). Bypass Ratio: 0%%\n');
+end
+
+fprintf('\n--- 3. ESPANSIONE E UGELLO (geometria variabile) ---\n');
+fprintf('Mach Ingresso Ugello (M7):    %.4f       (imposto dal loop 4: target 0.4000)\n', M7);
+fprintf('Gola A8 (risultato):          %.5f m^2  (design: %.5f m^2, %+.1f%%)\n', A8_now, A8_design, (A8_now/A8_design-1)*100);
+fprintf('Uscita A9 (risultato):        %.5f m^2  (design: %.5f m^2, %+.1f%%)\n', A9_now, A9_design, (A9_now/A9_design-1)*100);
+
+D9_now    = sqrt(4*A9_now/pi);
+D9_design = sqrt(4*A9_design/pi);
+fprintf('Diametro Uscita D9 (risultato): %.3f m   (design: %.3f m, %+.1f%%)\n', D9_now, D9_design, (D9_now/D9_design-1)*100);
+fprintf('Rapporto Espansione Ugello (A9/A8): %.2f  (indicativo di riferimento reale: ~1.0-1.8)\n', A9_now/A8_now);
+fprintf('Ugello Espanso a:             %.0f Pa (p9 = p0)\n', p9);
+fprintf('Nozzle Pressure Ratio (NPR):  %.2f\n', P7/p0);
+if M8 >= 1
+    stato_gola = '(CHOKED)';
+else
+    stato_gola = '(UNCHOKED)';
+end
+fprintf('Stato Gola (M8):              %.2f %s\n', M8, stato_gola);
+fprintf('Mach e Vel. Uscita (M9/v9):   %.2f / %.1f m/s\n', M9_exit, v9_exit);
+
+fprintf('\n--- 4. PRESTAZIONI E MECCANICA DEL VOLO ---\n');
+fprintf('Spinta Lorda (Gross):         %.2f kN\n', Gross_Thrust/1000);
+fprintf('Resistenza Presa (Ram Drag):  %.2f kN\n', Ram_Drag/1000);
+fprintf('-------------------------------------------------\n');
+fprintf('Spinta NETTA Disponibile:     %.2f kN\n', Thrust_Available/1000);
+fprintf('Spinta Necessaria Volo:       %.2f kN\n', Spinta_Nec_Singolo/1000);
+% FIX 16 (continua): T_AB non e' piu' un dato, e' il risultato del loop 5
+% - questo e' il numero che dice quanto post-bruciatore serve davvero,
+% non di piu'.
+fprintf('T_AB trovato (post-bruciatore): %.1f K    (range di specifica: 1366-2033 K)\n', T_AB);
+% FIX 14 (corretto): il primo criterio deve essere "il loop 5 e' davvero
+% convergente" (conv_TAB), non il segno di margine - un margine di
+% -0.000 kN e' un pareggio perfetto, non una violazione, ma un semplice
+% "margine>=0" lo etichettava erroneamente [VIOLATO] per rumore numerico.
+if abs(err_thrust) <= TOLL
+    fprintf('MARGINE DI SPINTA:            %+.4f kN     [OK] (pareggiato dal loop 5, T_AB=%.1fK)\n', margine/1000, T_AB);
+elseif margine >= 0
+    fprintf('MARGINE DI SPINTA:            %+.3f kN      [OK] (T_AB al minimo di specifica, spinta gia'' sufficiente)\n', margine/1000);
+else
+    fprintf('MARGINE DI SPINTA:            %+.3f kN      [VIOLATO] (nemmeno T_AB=2033K basta)\n', margine/1000);
+end
+if TSFC_g_Nh < 250
+    fprintf('Consumo Specifico (TSFC):     %.2f g/(N*h) [OK: < 250]\n', TSFC_g_Nh);
+else
+    fprintf('Consumo Specifico (TSFC):     %.2f g/(N*h) [FALLITO: > 250]\n', TSFC_g_Nh);
+end
+fprintf('Angolo di Attacco Richiesto:  %.2f gradi\n', AoA_req);
+
+
+%% 7. GRAFICI (DASHBOARD UNIFICATA)
+% Crea un'unica grande finestra per i grafici
+figure('Name', sprintf('Dashboard Motore J58 - Mach %.2f', M0), 'Color', 'w', 'Position', [50, 100, 1500, 500]);
+
+if M0 <= 2.0
+    % Layout a 2 colonne (Compressore e Turbina)
+    subplot(1, 2, 1);
+    Plot_Compressor_Map(unique(N_c), mf_func, pr_func, ef_func, surge, ...
+        m_corr_2_design, OPR_design, mfc, OPR_eff, ...
+        sprintf('Compressore (Valvole Chiuse)'));
+        
+    subplot(1, 2, 2);
+    Plot_Turbine_Map(unique(N_t), mf_func_t, pr_func_t, ef_func_t, ...
+        m_corr_4_design, PR_turb_design, mfc_t * Nc_ad_t, PR, ...
+        sprintf('Turbina'));
+else
+    % Layout a 3 colonne (LPC, HPC e Turbina)
+    subplot(1, 3, 1);
+    Plot_Compressor_Map(unique(N_c_L), mf_func_L, pr_func_L, ef_func_L, surge_L, ...
+        m_corr_2_design, PR_LPC_des, mfc_LPC, PR_LPC_eff, ...
+        sprintf('LPC (Valvole Aperte)'));
+        
+    subplot(1, 3, 2);
+    Plot_Compressor_Map(unique(N_c_H), mf_func_H, pr_func_H, ef_func_H, surge_H, ...
+        m_corr_25_design, PR_HPC_des, mfc_HPC, PR_HPC_eff, ...
+        sprintf('HPC (Valvole Aperte)'));
+        
+    subplot(1, 3, 3);
+    Plot_Turbine_Map(unique(N_t), mf_func_t, pr_func_t, ef_func_t, ...
+        m_corr_4_design, PR_turb_design, mfc_t * Nc_ad_t, PR, ...
+        sprintf('Turbina'));
+end
+
+% Titolo globale alla finestra (opzionale, richiede MATLAB R2018b o superiore)
+try sgtitle(sprintf('Punti Operativi J58: Mach %.2f a %.0f m', M0, quota), 'FontWeight', 'bold', 'FontSize', 14); catch; end
+
+
+%% =========================================================================
+%  FUNZIONI LOCALI (Utility)
+%% =========================================================================
+function [p_stat, M] = calc_p_stat(mf, Pt, Tt, k, R, A)
+    % FIX 10: aggiunto secondo output M (il Mach statico gia' calcolato
+    % internamente dalla bisezione, prima scartato). Retrocompatibile:
+    % le chiamate con un solo output a sinistra continuano a funzionare
+    % esattamente come prima.
+    C = mf * sqrt(R * Tt) / (Pt * A * sqrt(k));
+    M_min = 0.0001; M_max = 1.0; M = 0.5;
+    for i = 1:30
+        C_calc = M * (1 + (k-1)/2 * M^2)^(-(k+1)/(2*(k-1)));
+        if C_calc > C 
+            M_max = M; 
+        else 
+            M_min = M; 
+        end
+        M = (M_min + M_max)/2;
+    end
+    p_stat = Pt / (1 + (k-1)/2 * M^2)^(k/(k-1));
+end
+
+%% =====================================================================
+% FUNZIONI LOCALI AGGIORNATE (Senza il comando 'figure')
+%% =====================================================================
+function Plot_Compressor_Map(N_c, mf_func, pr_func, ef_func, surge, m_corr_design, PR_design, mfc_off, PR_off, titolo)
+    Beta_plot = linspace(0, 1, 50); [N_grid, B_grid] = ndgrid(N_c, Beta_plot);
+    mf_plot = mf_func(N_grid, B_grid); pr_plot = pr_func(N_grid, B_grid); eff_plot = ef_func(N_grid, B_grid);
+    
+    hold on; grid on; % <--- FIGURE rimosso, usa il subplot attivo
+    
+    for i = 1:length(N_c); plot(mf_plot(i,:), pr_plot(i,:), '-', 'Color', [0.6 0.6 0.6], 'HandleVisibility','off'); end
+    [C, h] = contour(mf_plot, pr_plot, eff_plot*100, [50, 60, 70, 75, 80, 82.5, 85, 87.5, 88.5], '--k');
+    clabel(C, h, 'FontSize', 9, 'Color', [0.2 0.2 0.2], 'BackgroundColor', 'w');
+    
+    if ~isempty(surge)
+        plot(surge(1,:), surge(2,:), 'r-', 'LineWidth', 2, 'DisplayName', 'Surge Line');
+        PR_surge = interp1(surge(1,:), surge(2,:), mfc_off, 'linear', 'extrap');
+        SM_percent = ((PR_surge - PR_off) / PR_off) * 100;
+        plot([mfc_off mfc_off], [PR_off PR_surge], 'r--', 'LineWidth', 1.5, 'HandleVisibility','off');
+        text(mfc_off, PR_off + (PR_surge-PR_off)/2, sprintf(' SM: %.1f%%', SM_percent), 'Color','r','FontWeight','bold','BackgroundColor','w','EdgeColor','r','Margin',2);
+    end
+    
+    scatter(m_corr_design, PR_design, 150, 'p', 'MarkerFaceColor','r','MarkerEdgeColor','k','LineWidth',1.5,'DisplayName','Design Point');
+    scatter(mfc_off, PR_off, 120, 'o', 'MarkerFaceColor','b','MarkerEdgeColor','k','LineWidth',1.5,'DisplayName','Off-Design Point');
+    
+    title(titolo, 'FontWeight','bold'); xlabel('m_{corr} [kg/s]'); ylabel('PR'); legend('Location','best');
+end
+
+function Plot_Turbine_Map(N_t, mf_func_t, pr_func_t, ef_func_t, m_corr_design, PR_design, flow_off, PR_off, titolo)
+    Beta_plot = linspace(0, 1, 50); [N_grid, B_grid] = ndgrid(N_t, Beta_plot);
+    mf_plot = mf_func_t(N_grid, B_grid); pr_plot = pr_func_t(N_grid, B_grid); eff_plot = ef_func_t(N_grid, B_grid); X_plot = mf_plot .* N_grid;
+    
+    hold on; grid on; % <--- FIGURE rimosso, usa il subplot attivo
+    
+    i_design = -1;
+    for i = 1:length(N_t)
+        if abs(N_t(i) - 1) < 1e-3; i_design = i; else; plot(X_plot(i,:), pr_plot(i,:), 'k-', 'LineWidth', 1, 'HandleVisibility','off'); end
+    end
+    if i_design > 0; plot(X_plot(i_design,:), pr_plot(i_design,:), 'r-', 'LineWidth', 2, 'DisplayName', 'N_{corr} = 1.0'); end
+    
+    [C, h] = contour(X_plot, pr_plot, eff_plot, [0.60,0.65,0.70,0.72,0.74,0.76,0.78,0.80,0.82,0.84,0.86,0.88,0.89,0.90], '--k');
+    clabel(C, h, 'FontSize', 9, 'Color', [0.3 0.3 0.3], 'BackgroundColor', 'w');
+    
+    scatter(m_corr_design, PR_design, 150, 'p', 'MarkerFaceColor','r','MarkerEdgeColor','k','LineWidth',1.5,'DisplayName','Design Point');
+    scatter(flow_off, PR_off, 120, 'o', 'MarkerFaceColor','b','MarkerEdgeColor','k','LineWidth',1.5,'DisplayName','Off-Design Point');
+    
+    title(titolo, 'FontWeight','bold'); xlabel('Flow Par. [kg/s]'); ylabel('PR'); legend('Location','best');
+end

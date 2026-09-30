@@ -1,0 +1,784 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Engineering portfolio of Lorenzo Del Re, MSc in Mechanical Engineering, University of Padua. Fluid machinery design, CFD analysis and aerodynamic optimization." />
+  <title>Lorenzo Del Re | Mechanical Engineering Portfolio</title>
+  <style>
+    :root {
+      --bg: #0b1120;
+      --card-bg: #1e293b;
+      --card-border: #334155;
+      --text-main: #f8fafc;
+      --text-muted: #a3b1c6;
+      --accent: #38bdf8;
+      --accent-glow: rgba(56, 189, 248, 0.12);
+      --tag-bg: #0f172a;
+      --attachment-bg: #0f172a;
+      --radius: 10px;
+      --transition: border-color 0.2s ease, background-color 0.2s ease, color 0.2s ease;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    }
+
+    body {
+      background-color: var(--bg);
+      color: var(--text-main);
+      line-height: 1.6;
+      padding: 48px 20px;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      position: relative;
+    }
+
+    a:focus-visible,
+    button:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+    }
+
+    /* Language Switcher */
+    .lang-switcher {
+      position: absolute;
+      top: -20px;
+      right: 0;
+      display: flex;
+      gap: 8px;
+    }
+
+    .lang-btn {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      color: var(--text-muted);
+      padding: 6px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.85rem;
+      font-weight: 600;
+      transition: var(--transition);
+    }
+
+    .lang-btn.active, .lang-btn:hover {
+      color: var(--text-main);
+      border-color: var(--accent);
+      background: var(--accent-glow);
+    }
+
+    /* Header */
+    header {
+      text-align: center;
+      margin-bottom: 44px;
+      margin-top: 20px;
+    }
+
+    header h1 {
+      font-size: 2.5rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      margin-bottom: 6px;
+    }
+
+    header .subtitle {
+      color: var(--accent);
+      font-size: 1.1rem;
+      font-weight: 600;
+      margin-bottom: 14px;
+    }
+
+    header .bio {
+      color: var(--text-muted);
+      font-size: 1rem;
+      max-width: 720px;
+      margin: 0 auto 24px;
+    }
+
+    .contacts {
+      display: flex;
+      justify-content: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .contact-link {
+      color: var(--text-main);
+      text-decoration: none;
+      font-size: 0.9rem;
+      font-weight: 500;
+      padding: 6px 14px;
+      border: 1px solid var(--card-border);
+      border-radius: 6px;
+      transition: var(--transition);
+    }
+
+    a.contact-link:hover {
+      border-color: var(--accent);
+      background: var(--accent-glow);
+    }
+
+    .contact-label {
+      color: var(--text-muted);
+      font-weight: 400;
+      margin-right: 6px;
+    }
+
+    /* Section heading */
+    .section-title {
+      font-size: 1.4rem;
+      font-weight: 600;
+      text-align: center;
+      margin-bottom: 18px;
+    }
+
+    /* Filters */
+    .filter-bar {
+      display: flex;
+      justify-content: center;
+      gap: 10px;
+      margin-bottom: 32px;
+      flex-wrap: wrap;
+    }
+
+    .filter-btn {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      color: var(--text-muted);
+      padding: 8px 16px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.9rem;
+      font-weight: 500;
+      transition: var(--transition);
+    }
+
+    .filter-btn:hover,
+    .filter-btn.active {
+      color: var(--text-main);
+      border-color: var(--accent);
+      background: var(--accent-glow);
+    }
+
+    /* Projects grid */
+    .projects-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+      gap: 24px;
+    }
+
+    .project-card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: var(--radius);
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      transition: var(--transition);
+    }
+
+    .project-card:hover {
+      border-color: var(--accent);
+    }
+
+    .card-header {
+      margin-bottom: 12px;
+    }
+
+    .category-badge {
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: var(--accent);
+      background: var(--tag-bg);
+      padding: 4px 10px;
+      border-radius: 4px;
+      border: 1px solid var(--card-border);
+    }
+
+    .project-title {
+      font-size: 1.2rem;
+      font-weight: 600;
+      margin-bottom: 4px;
+      color: var(--text-main);
+    }
+
+    .project-course {
+      font-size: 0.85rem;
+      color: var(--accent);
+      margin-bottom: 12px;
+      font-weight: 500;
+    }
+
+    .project-desc {
+      color: var(--text-muted);
+      font-size: 0.92rem;
+      margin-bottom: 16px;
+      flex-grow: 1;
+    }
+
+    .project-desc ul {
+      list-style-type: disc;
+      padding-left: 20px;
+      margin-top: 6px;
+    }
+
+    .project-desc li {
+      margin-bottom: 6px;
+    }
+
+    /* Documents */
+    .project-attachments {
+      background: var(--attachment-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 6px;
+      padding: 10px 14px;
+      margin-bottom: 16px;
+    }
+
+    .attachment-title {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      font-weight: 600;
+      margin-bottom: 8px;
+      display: block;
+    }
+
+    .attachment-links {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .pdf-link {
+      display: inline-flex;
+      align-items: center;
+      color: var(--text-main);
+      font-size: 0.85rem;
+      font-weight: 500;
+      text-decoration: none;
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      padding: 6px 12px;
+      border-radius: 4px;
+      transition: var(--transition);
+    }
+
+    .pdf-link:hover {
+      border-color: var(--accent);
+      background: var(--accent-glow);
+    }
+
+    .tags-container {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      padding-top: 12px;
+      border-top: 1px solid var(--card-border);
+    }
+
+    .tech-tag {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      background: var(--tag-bg);
+      padding: 3px 8px;
+      border-radius: 4px;
+      border: 1px solid var(--card-border);
+    }
+
+    .card-footer {
+      display: flex;
+      gap: 16px;
+      padding-top: 14px;
+      flex-wrap: wrap;
+    }
+
+    .action-link {
+      color: var(--accent);
+      text-decoration: none;
+      font-size: 0.85rem;
+      font-weight: 600;
+    }
+
+    .action-link:hover {
+      text-decoration: underline;
+    }
+
+    footer {
+      margin-top: 48px;
+      text-align: center;
+      color: var(--text-muted);
+      font-size: 0.85rem;
+    }
+
+    .hidden {
+      display: none !important;
+    }
+
+    @media (max-width: 600px) {
+      .projects-grid {
+        grid-template-columns: 1fr;
+      }
+      header h1 {
+        font-size: 2rem;
+      }
+      .lang-switcher {
+        position: static;
+        justify-content: center;
+        margin-bottom: 16px;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <!-- Pulsanti Lingua -->
+    <div class="lang-switcher">
+      <button class="lang-btn" data-lang="en">EN</button>
+      <button class="lang-btn active" data-lang="it">IT</button>
+    </div>
+
+    <header>
+      <h1>Lorenzo Del Re</h1>
+      <p class="subtitle">
+        <span class="lang-en hidden">MSc in Mechanical Engineering, University of Padua</span>
+        <span class="lang-it">Laurea Magistrale in Ingegneria Meccanica, Università di Padova</span>
+      </p>
+      <p class="bio">
+        <span class="lang-en hidden">MSc Candidate in Mechanical Engineering (Propulsion Machinery track). My academic path focuses on the functional design of fluid machinery and energy conversion systems. I have specifically deepened my knowledge of performance analysis through CFD simulations and the application of numerical optimization methods (single and multi-objective). I integrate these theoretical studies with practical experience in the Hydrodynamics Department of the Metis Vela university sailing team.</span>
+        <span class="lang-it">Laureando Magistrale in Ingegneria Meccanica, indirizzo Macchine per la Propulsione. Il mio percorso di studi è incentrato sulla progettazione funzionale di macchine a fluido e per la conversione di energia. Ho approfondito in particolare l'analisi delle prestazioni tramite simulazioni fluidodinamiche (CFD) e l'applicazione di metodi numerici di ottimizzazione (mono e multi-obiettivo). Integro queste conoscenze teoriche con l'esperienza pratica nel reparto Idrodinamica del team velico universitario Metis Vela.</span>
+      </p>
+      <div class="contacts">
+        <a href="mailto:lorenzodelre55@gmail.com" class="contact-link"><span class="contact-label">Email</span>lorenzodelre55@gmail.com</a>
+        <a href="tel:+393404909448" class="contact-link"><span class="contact-label"><span class="lang-en hidden">Phone</span><span class="lang-it">Telefono</span></span>+39 340 490 9448</a>
+        <span class="contact-link"><span class="contact-label"><span class="lang-en hidden">Location</span><span class="lang-it">Sede</span></span><span class="lang-en hidden">Trieste, Italy</span><span class="lang-it">Trieste, Italia</span></span>
+      </div>
+    </header>
+
+    <main>
+      <h2 class="section-title">
+        <span class="lang-en hidden">Selected Projects</span>
+        <span class="lang-it">Progetti Selezionati</span>
+      </h2>
+
+      <!-- Navigation filters -->
+      <div class="filter-bar">
+        <button class="filter-btn active" data-filter="all"><span class="lang-en hidden">All</span><span class="lang-it">Tutti</span></button>
+        <button class="filter-btn" data-filter="sailing">Metis Vela UNIPD</button>
+        <button class="filter-btn" data-filter="cfd"><span class="lang-en hidden">CFD &amp; Aerodynamics</span><span class="lang-it">CFD &amp; Aerodinamica</span></button>
+        <button class="filter-btn" data-filter="design"><span class="lang-en hidden">Design &amp; Machinery</span><span class="lang-it">Progettazione &amp; Macchine</span></button>
+      </div>
+
+      <!-- Projects grid -->
+      <div class="projects-grid">
+
+        <!-- 1. Metis Vela UNIPD: hydrodynamics -->
+        <article class="project-card" data-category="sailing">
+          <div>
+            <div class="card-header">
+              <span class="category-badge">
+                <span class="lang-en hidden">Student sailing Team &middot; 2nd Place, SuMoth Challenge 2026</span>
+                <span class="lang-it">Team velico universitario &middot; 2° Posto, SuMoth Challenge 2026</span>
+              </span>
+            </div>
+            <h3 class="project-title">
+              <span class="lang-en hidden">Hydrofoil Appendage Design and CFD Analysis</span>
+              <span class="lang-it">Progettazione Appendici Hydrofoil e Analisi CFD</span>
+            </h3>
+            <div class="project-course">
+              <span class="lang-en hidden">Metis Vela UNIPD, Hydrodynamics Department</span>
+              <span class="lang-it">Metis Vela UNIPD, Reparto Idrodinamica</span>
+            </div>
+            <div class="project-desc">
+              <ul class="lang-en hidden">
+                <li>Optimized two-dimensional foil sections, achieving a 12% improvement in efficiency.</li>
+                <li>Performed 3D CFD simulations in Simcenter STAR-CCM+ to assess appendage performance.</li>
+                <li>Designed molds for CNC machining in Rhinoceros, followed by composite lamination and resin infusion.</li>
+              </ul>
+              <ul class="lang-it">
+                <li>Ottimizzazione di sezioni foil bidimensionali, ottenendo un miglioramento del 12% in termini di efficienza.</li>
+                
+                <li>Esecuzione di simulazioni CFD 3D in Simcenter STAR-CCM+ per valutare le prestazioni delle appendici.</li>
+                <li>Progettazione di stampi per lavorazione CNC con Rhinoceros, seguita da laminazione di compositi e infusione di resina.</li>
+              </ul>
+            </div>
+
+            <div class="project-attachments">
+              <span class="attachment-title">
+                <span class="lang-en hidden">Documents</span>
+                <span class="lang-it">Documenti</span>
+              </span>
+              <div class="attachment-links">
+                <a href="./airfoil_optimization.pdf" target="_blank" rel="noopener" class="pdf-link">
+                  <span class="lang-en hidden">Airfoil Optimization Report (PDF)</span>
+                  <span class="lang-it">Report Ottimizzazione Airfoil (PDF)</span>
+                </a>
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <div class="tags-container">
+              <span class="tech-tag">Simcenter STAR-CCM+</span>
+              <span class="tech-tag">Optimization Algorithms</span>
+              <span class="tech-tag">SolidWorks</span>
+              <span class="tech-tag">Rhinoceros</span>
+              <span class="tech-tag">Composite Manufacturing</span>
+            </div>
+            <div class="card-footer">
+              <a href="https://bestr.it/award/show/a8WZXiawQFuuyT5ymSQqKw" target="_blank" rel="noopener" class="action-link">
+                <span class="lang-en hidden">Digital Badge</span>
+                <span class="lang-it">Badge Digitale</span>
+              </a>
+              <a href="https://www.dii.unipd.it/metis-vela-sul-podio-alla-sumoth-challenge-2026" target="_blank" rel="noopener" class="action-link">
+                <span class="lang-en hidden">University News Article (Italian)</span>
+                <span class="lang-it">Articolo News di Ateneo</span>
+              </a>
+            </div>
+          </div>
+        </article>
+
+        <!-- 2. NACA multi-objective optimization -->
+        <article class="project-card" data-category="cfd">
+          <div>
+            <div class="card-header">
+              <span class="category-badge">
+                <span class="lang-en hidden">Individual Project</span>
+                <span class="lang-it">Progetto Individuale</span>
+              </span>
+            </div>
+            <h3 class="project-title">
+              <span class="lang-en hidden">Multi-Objective Aerodynamic Optimization</span>
+              <span class="lang-it">Ottimizzazione Aerodinamica Multiobiettivo</span>
+            </h3>
+            <div class="project-course">
+              <span class="lang-en hidden">Advanced Methods for Optimization of Machine Thermofluid Dynamics</span>
+              <span class="lang-it">Metodi Avanzati per l'Ottimizzazione della Termofluidodinamica delle Macchine</span>
+            </div>
+            <div class="project-desc">
+              <ul class="lang-en hidden">
+                <li>Developed an automated optimization of the NACA 65(12)10 airfoil, maximizing flow deflection while minimizing aerodynamic losses.</li>
+                <li>Built an end-to-end simulation pipeline coupling MATLAB, SALOME (Python scripting) and ANSYS Fluent.</li>
+                <li>Parameterized the geometry with Bézier curves and computed the Pareto front using a genetic algorithm (MATLAB gamultiobj).</li>
+              </ul>
+              <ul class="lang-it">
+                <li>Sviluppo di un'ottimizzazione automatizzata del profilo aerodinamico NACA 65(12)10, massimizzando la deflessione del flusso e minimizzando le perdite.</li>
+                <li>Costruzione di una pipeline di simulazione completa integrando MATLAB, SALOME (script Python) e ANSYS Fluent.</li>
+                <li>Parametrizzazione della geometria con curve di Bézier e calcolo del fronte di Pareto usando un algoritmo genetico (MATLAB gamultiobj).</li>
+              </ul>
+            </div>
+
+            <div class="project-attachments">
+              <span class="attachment-title">
+                <span class="lang-en hidden">Documents</span>
+                <span class="lang-it">Documenti</span>
+              </span>
+              <div class="attachment-links">
+                <a href="Relazione6.pdf" target="_blank" rel="noopener" class="pdf-link">
+                  <span class="lang-en hidden">Project Report (PDF)</span>
+                  <span class="lang-it">Report di Progetto (PDF)</span>
+                </a>
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <div class="tags-container">
+              <span class="tech-tag">MATLAB</span>
+              <span class="tech-tag">ANSYS Fluent</span>
+              <span class="tech-tag">SALOME (Python)</span>
+              <span class="tech-tag">Genetic Algorithms</span>
+            </div>
+          </div>
+        </article>
+
+        <!-- 3. Francis turbine -->
+        <article class="project-card" data-category="design">
+          <div>
+            <div class="card-header">
+              <span class="category-badge">
+                <span class="lang-en hidden">Team Project</span>
+                <span class="lang-it">Progetto di Gruppo</span>
+              </span>
+            </div>
+            <h3 class="project-title">
+              <span class="lang-en hidden">Preliminary Design of a 2.9 MW Francis Turbine</span>
+              <span class="lang-it">Progetto Preliminare di una Turbina Francis da 2.9 MW</span>
+            </h3>
+            <div class="project-course">
+              <span class="lang-en hidden">Machine Design 2</span>
+              <span class="lang-it">Macchine 2</span>
+            </div>
+            <div class="project-desc">
+              <ul class="lang-en hidden">
+                <li>Carried out the preliminary hydraulic sizing of a 2.9 MW Francis turbine, including assessment of cavitation limits.</li>
+                <li>Developed MATLAB scripts to iteratively compute velocity triangles and blade angles along multiple streamlines.</li>
+                <li>Generated blade profiles in ANSYS BladeGen, modeled the runner and distributor assembly in SolidWorks.</li>
+              </ul>
+              <ul class="lang-it">
+                <li>Esecuzione del dimensionamento idraulico preliminare di una turbina Francis da 2.9 MW, inclusa la valutazione dei limiti di cavitazione.</li>
+                <li>Sviluppo di script MATLAB per calcolare iterativamente i triangoli di velocità e gli angoli palari lungo diverse linee di corrente.</li>
+                <li>Generazione dei profili in ANSYS BladeGen, modellazione della girante e dell'assieme distributore in SolidWorks.</li>
+              </ul>
+            </div>
+
+            <div class="project-attachments">
+              <span class="attachment-title">
+                <span class="lang-en hidden">Documents</span>
+                <span class="lang-it">Documenti</span>
+              </span>
+              <div class="attachment-links">
+                <a href="Turbina_Francis.pdf" target="_blank" rel="noopener" class="pdf-link">
+                  <span class="lang-en hidden">Francis Turbine Report (PDF)</span>
+                  <span class="lang-it">Report Turbina Francis (PDF)</span>
+                </a>
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <div class="tags-container">
+              <span class="tech-tag">ANSYS CFX</span>
+              <span class="tech-tag">ANSYS BladeGen</span>
+              <span class="tech-tag">SolidWorks</span>
+              <span class="tech-tag">MATLAB</span>
+            </div>
+          </div>
+        </article>
+
+        <!-- 4. TBCC engine (SR-71) -->
+        <article class="project-card" data-category="cfd">
+          <div>
+            <div class="card-header">
+              <span class="category-badge">
+                <span class="lang-en hidden">Individual Project</span>
+                <span class="lang-it">Progetto Individuale</span>
+              </span>
+            </div>
+            <h3 class="project-title">
+              <span class="lang-en hidden">Thermodynamic Modeling of a TBCC Engine (SR-71)</span>
+              <span class="lang-it">Modellazione Termodinamica di un Motore TBCC (SR-71)</span>
+            </h3>
+            <div class="project-course">
+              <span class="lang-en hidden">Aircraft Engines</span>
+              <span class="lang-it">Motori aeronautici</span>
+            </div>
+            <div class="project-desc">
+              <ul class="lang-en hidden">
+                <li>Developed a MATLAB thermodynamic model of a Turbine-Based Combined Cycle (TBCC) engine.</li>
+                <li>Evaluated performance at take-off and supersonic cruise, including bypass ratio, pressure levels and exhaust conditions.</li>
+                <li>Defined the operating line and analyzed engine behavior in OFF-DESIGN conditions.</li>
+              </ul>
+              <ul class="lang-it">
+                <li>Sviluppo di un modello termodinamico MATLAB di un motore a ciclo combinato basato su turbina (TBCC).</li>
+                <li>Valutazione delle prestazioni al decollo e in crociera supersonica (rapporto di bypass, livelli di pressione e condizioni di scarico).</li>
+                <li>Definizione della linea di funzionamento e analisi del comportamento del motore in condizioni di OFF-DESIGN.</li>
+              </ul>
+            </div>
+
+            <div class="project-attachments">
+              <span class="attachment-title">
+                <span class="lang-en hidden">Documents</span>
+                <span class="lang-it">Documenti</span>
+              </span>
+              <div class="attachment-links">
+                <a href="aeronautici.pdf" target="_blank" rel="noopener" class="pdf-link">
+                  <span class="lang-en hidden">Initial draft, report not yet available</span>
+                  <span class="lang-it">Bozza iniziale, report non ancora disponibile</span>
+                </a>
+                 <a href="codice.txt" target="_blank" rel="noopener" class="pdf-link">
+                  <span class="lang-en hidden">OFF-DESIGN MATLAB CODE (draft)</span>
+                  <span class="lang-it">Codice MATLAB OFF-DESIGN (bozza)</span>
+                </a>
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <div class="tags-container">
+              <span class="tech-tag">MATLAB</span>
+              <span class="tech-tag">Aircraft Propulsion</span>
+              <span class="tech-tag">Thermodynamic Cycles</span>
+            </div>
+          </div>
+        </article>
+
+        <!-- 5. Applied Fluid Dynamics coursework -->
+        <article class="project-card" data-category="cfd">
+          <div>
+            <div class="card-header">
+              <span class="category-badge">
+                <span class="lang-en hidden">Coursework</span>
+                <span class="lang-it">Esame / Corso</span>
+              </span>
+            </div>
+            <h3 class="project-title">
+              <span class="lang-en hidden">Advanced CFD Simulations in ANSYS Fluent</span>
+              <span class="lang-it">Simulazioni CFD Avanzate in ANSYS Fluent</span>
+            </h3>
+            <div class="project-course">
+              <span class="lang-en hidden">Applied Fluid Dynamics</span>
+              <span class="lang-it">Fluidodinamica Applicata</span>
+            </div>
+            <div class="project-desc">
+              <ul class="lang-en hidden">
+                <li>External aerodynamics of bluff bodies and airfoils.</li>
+                <li>Conjugate heat transfer in steady-state and transient regimes.</li>
+                <li>Multiphase flows and simulation of rotating machinery.</li>
+                <li>Fluid–structure interaction (FSI) for coupled aerodynamic and structural analysis.</li>
+              </ul>
+              <ul class="lang-it">
+                <li>Aerodinamica esterna di corpi tozzi e profili alari.</li>
+                <li>Scambio termico coniugato in regime stazionario e transitorio.</li>
+                <li>Flussi multifase e simulazione di macchinari rotanti.</li>
+                <li>Interazione fluido-struttura (FSI) per l'analisi accoppiata aerodinamica e strutturale.</li>
+              </ul>
+            </div>
+
+            <div class="project-attachments">
+              <span class="attachment-title">
+                <span class="lang-en hidden">Documents</span>
+                <span class="lang-it">Documenti</span>
+              </span>
+              <div class="attachment-links">
+                <a href="Fluidodinamica.pdf" target="_blank" rel="noopener" class="pdf-link">
+                  <span class="lang-en hidden">CFD Coursework Report (PDF)</span>
+                  <span class="lang-it">Report Corso CFD (PDF)</span>
+                </a>
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <div class="tags-container">
+              <span class="tech-tag">ANSYS Fluent</span>
+              <span class="tech-tag">Multiphase Flow</span>
+              <span class="tech-tag">FSI</span>
+              <span class="tech-tag">Heat Transfer</span>
+            </div>
+          </div>
+        </article>
+
+        <!-- 6. Gyroscopic stability (MSC Adams) -->
+        <article class="project-card" data-category="design">
+          <div>
+            <div class="card-header">
+              <span class="category-badge">
+                <span class="lang-en hidden">Individual Project</span>
+                <span class="lang-it">Progetto Individuale</span>
+              </span>
+            </div>
+            <h3 class="project-title">
+              <span class="lang-en hidden">Dynamic Analysis and Gyroscopic Stability</span>
+              <span class="lang-it">Analisi Dinamica e Stabilità Giroscopica</span>
+            </h3>
+            <div class="project-course">
+              <span class="lang-en hidden">Modeling and Simulation of Mechanical Systems</span>
+              <span class="lang-it">Modellazione e Simulazione di Sistemi Meccanici</span>
+            </div>
+            <div class="project-desc">
+              <ul class="lang-en hidden">
+                <li>Developed a multibody model of a gyroscope in MSC Adams to study its dynamic stability.</li>
+                <li>Evaluated precession, nutation and stability margins across a range of spin rates.</li>
+                <li>Validated the simulated dynamic response against analytical results for varying physical parameters.</li>
+              </ul>
+              <ul class="lang-it">
+                <li>Sviluppo di un modello multibody di un giroscopio in MSC Adams per studiarne la stabilità dinamica.</li>
+                <li>Valutazione di precessione, nutazione e margini di stabilità in diversi regimi di rotazione.</li>
+                <li>Validazione della risposta dinamica simulata rispetto a modelli analitici variandone i parametri fisici.</li>
+              </ul>
+            </div>
+
+            <div class="project-attachments">
+              <span class="attachment-title">
+                <span class="lang-en hidden">Documents</span>
+                <span class="lang-it">Documenti</span>
+              </span>
+              <div class="attachment-links">
+                <a href="COCUZZA.pdf" target="_blank" rel="noopener" class="pdf-link">
+                  <span class="lang-en hidden">Multibody Analysis Report (PDF)</span>
+                  <span class="lang-it">Report Analisi Multibody (PDF)</span>
+                </a>
+                <a href="./Presentazione.pptx" target="_blank" rel="noopener" class="pdf-link">
+                  <span class="lang-en hidden">Presentation (PPTX)</span>
+                  <span class="lang-it">Presentazione (PPTX)</span>
+                </a>
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <div class="tags-container">
+              <span class="tech-tag">MSC Adams</span>
+              <span class="tech-tag">Multibody Dynamics</span>
+              <span class="tech-tag">Dynamic Stability</span>
+            </div>
+          </div>
+        </article>
+
+      </div>
+    </main>
+
+    <footer>
+      &copy; 2026 Lorenzo Del Re
+    </footer>
+  </div>
+
+  <script>
+    // Project filters
+    const filterButtons = document.querySelectorAll('.filter-btn');
+    const projectCards = document.querySelectorAll('.project-card');
+
+    filterButtons.forEach(button => {
+      button.addEventListener('click', () => {
+        filterButtons.forEach(btn => btn.classList.remove('active'));
+        button.classList.add('active');
+
+        const filterValue = button.getAttribute('data-filter');
+
+        projectCards.forEach(card => {
+          const cardCategory = card.getAttribute('data-category');
+          if (filterValue === 'all' || cardCategory === filterValue) {
+            card.classList.remove('hidden');
+          } else {
+            card.classList.add('hidden');
+          }
+        });
+      });
+    });
+
+    // Language switcher
+    const langBtns = document.querySelectorAll('.lang-btn');
+    const enElements = document.querySelectorAll('.lang-en');
+    const itElements = document.querySelectorAll('.lang-it');
+
+    langBtns.forEach(btn => {
+      btn.addEventListener('click', () => {
+        // Aggiorna lo stato dei bottoni
+        langBtns.forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+
+        const selectedLang = btn.getAttribute('data-lang');
+
+        // Aggiorna l'attributo del tag HTML
+        document.documentElement.lang = selectedLang;
+
+        if (selectedLang === 'it') {
+          enElements.forEach(el => el.classList.add('hidden'));
+          itElements.forEach(el => el.classList.remove('hidden'));
+        } else {
+          itElements.forEach(el => el.classList.add('hidden'));
+          enElements.forEach(el => el.classList.remove('hidden'));
+        }
+      });
+    });
+  </script>
+</body>
+</html>
